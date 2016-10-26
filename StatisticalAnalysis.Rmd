@@ -1,0 +1,2 @@
+# R-AWS-Redshift-Database
+In this file we're analyzing 30,727,926 users who played on our Android and iOS mobile application in the month of July 9, July 16, and July the 23rd, of 2016. I'll be analyzing the most popular award value, the award type, the type of card the user played, the campaigns that we’re acquiring more users, what acquisition source they came from, how much money we made for each user, how many times they played, and how many days they stayed on file.
