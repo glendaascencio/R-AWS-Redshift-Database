@@ -1,0 +1,28 @@
+## Glenda Ascencio                                                                     September 14, 2016
+
+############## Show All the Table Names that we have in AWS Redshift Database ############################
+## Libraries
+library(devtools)
+library(RPostgreSQL)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(zoo)
+library(xts)
+
+## Connecting to the AWS Redshift Database
+drv <- dbDriver("PostgreSQL")
+
+con <- dbConnect(drv, 
+                 "[website_on_AWS].redshift.amazonaws.com", 
+                 port=port_number, 
+                 user="user_name",      
+                 password="your_password", 
+                 dbname="db_name")
+
+## Show All the Table Names that we have in AWS Redshift Database
+show_table_name <- dbGetQuery(con, "SELECT table_name FROM information_schema.tables WHERE table_schema = 'db_name'")
+show_table_name
+
+## close connection
+dbDisconnect(con)
