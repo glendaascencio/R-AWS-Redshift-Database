@@ -1,2 +1,359 @@
 # R-AWS-Redshift-Database
 In this file we're analyzing 30,727,926 users who played on our Android and iOS mobile application in the month of July 9, July 16, and July the 23rd, of 2016. I'll be analyzing the most popular award value, the award type, the type of card the user played, the campaigns that we’re acquiring more users, what acquisition source they came from, how much money we made for each user, how many times they played, and how many days they stayed on file.
+
+---
+title: "Making Cohorts and performing User Segmentation Analysis on user's behavior"
+author: "Glenda Ascencio"
+date: "September/01/2016"
+output: word_document
+---
+
+```{r}
+## libraries
+library(devtools)
+library(RPostgreSQL)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(zoo)
+library(xts)
+
+##### Connecting RPostgreSQL to AWS Redshift using RPostgreSQL
+
+drv_generic <- dbDriver("PostgreSQL")
+
+con <- dbConnect(drv=drv_generic, 
+                 "link.redshift.amazonaws.com", 
+                 port=port_number, 
+                 user="user_name",      
+                 password="your_password", 
+                 dbname="name_of_db")
+
+awards_and_opportunity <- dbSendQuery(con, 
+  "SELECT  a.award_id, a.award_type, a.award_value, o.opp_id, o.opp_descript, o.isavailable
+   FROM mobile_app.awards a 
+   FULL JOIN mobile_app.opportunities o ON a.award_id = o.awardid")
+july_9_2016_cluter <- dbSendQuery(con,
+ "SELECT userid, oppid, createstamp FROM mobile_app.daily_users_behavior_2016_07_09"
+                          )
+july_16_2016_cluter <- dbSendQuery(con,
+  "SELECT userid, oppid, createstamp FROM     mobile_app.daily_users_behavior_2016_07_16"
+                            )
+  
+july_23_2016_cluter <- dbSendQuery(con,
+         "SELECT userid, oppid, createstamp FROM mobile_app.daily_users_behavior_2016_07_23"
+                            )
+daily_opportunities_3_sundays <- dbSendQuery(con,
+        "SELECT * FROM mobile_app.daily_opportunities WHERE source IN ('App_Lovin') AND 
+        ((date BETWEEN '2016-07-09 12:00:00' AND '2016-07-10 12:00:00') OR 
+        (date BETWEEN '2016-07-16 12:00:00' AND '2016-07-17 12:00:00') OR 
+        (date BETWEEN '2016-07-23 12:00:00' AND '2016-07-24 12:00:00'))"
+                              )
+## Fetch all elements 
+awards_and_opportunity <- fetch(awards_and_opportunity, n=-1)
+july_9_2016_cluter <- fetch(july_9_2016_cluter, n=-1)
+july_16_2016_cluter <- fetch(july_16_2016_cluter, n=-1)
+july_23_2016_cluter <- fetch(july_23_2016_cluter, n=-1)
+daily_opportunities_3_sundays <- fetch(daily_opportunities_3_sundays, n=-1)
+```
+
+##### Manipulating Cleaning
+```{r}
+###### Joining our data
+july_9_2016_cluter$oppid <- as.numeric(july_9_2016_cluter$oppid)
+july_16_2016_cluter$oppid <- as.numeric(july_16_2016_cluter$oppid)
+july_23_2016_cluter$oppid <- as.numeric(july_23_2016_cluter$oppid)
+awards_and_opportunity$oppid <- as.numeric(awards_and_opportunity$oppid)
+
+## LJ
+users_on_july_9 <- left_join(july_9_2016_cluter, awards_and_opportunity)
+users_on_july_16 <- left_join(july_16_2016_cluter, awards_and_opportunity)
+users_on_july_23 <- left_join(july_23_2016_cluter, awards_and_opportunity)
+```
+
+```{r}
+rm(awards_and_opportunity, july_9_2016_cluter)
+rm(july_16_2016_cluter, july_23_2016_cluter)
+
+### Save the clean data frame
+save(users_on_july_9, file = sprintf('july_9_cluster.RData'))
+save(users_on_july_16, file=sprintf('july_16_cluster.RData'))
+save(users_on_july_23, file=sprintf('july_23_cluster.RData'))
+save(awards_and_opportunity, file=sprintf('awards_and_opportunity.RData'))
+save(daily_opportunities_3_sundays, file=sprintf('daily_opportunities.RData'))
+
+
+
+## Loading
+load('july_9_cluster.RData')
+load('july_16_cluster.RData')
+load('july_23_cluster.RData')
+load('daily_opportunities.RData')
+
+
+## Manipulations
+users_interaction <- transform(users_interaction, day = strftime(users_interaction$usercreatedate, format = "%d"))
+users_interaction <- transform(users_interaction, actual_day = ifelse(day == "09" | day == "10","09",
+                                                 ifelse(day == "16" | day == "17","16",
+                                                        ifelse(day == "23" | day == "24","23", 
+                                                               "Hi Glenda :)"))))
+
+```
+
+##### Highest revenue that users are making for us on July 9th, 16th, and the 23rd
+
+```{r}
+## July highest money that user made for us
+highest_money_user_made <- users_interaction %>% 
+  group_by(money_user_made) %>% 
+  summarize(money_user_made_total=n()) %>%
+  arrange(des(money_user_made_total))
+  
+head(highest_money_user_made)
+
+
+```
+
+##### Classify the most profitable users on July the 9th, 16th, and the 23rd
+```{r}
+## 
+profitable_users <- users_interaction %>%
+  group_by(userid, money_user_made, actual_day) %>%
+  summarise(profitable_total=n())
+
+## In this sample we have 1,636 user who are profitable for the company 
+what_majority_profitable_user_are_playing <- arrange(profitable_users, desc(profitable_total))
+what_majority_profitable_user_are_playing
+
+## In this sample we have 271 users who are the highest most profitable
+highest_profitable_user <- filter(profitable_users, profitable_total >= 2)
+
+highest_profitable_user1 <- select(profitable_users, userid, money_user_made, profitable_total)
+highest_profitable_user1 <- filter(highest_profitable_user1, profitable_total >= 2)
+highest_profitable_user1
+
+```
+
+
+##### What was the most popular campaign on the month of July the 9th
+```{r echo=FALSE, message=FALSE, warning = FALSE}
+## july the 9th: 145
+campaign_on_july_9 <-july_9_cluster %>%
+  group_by(campaign_name) %>%
+  summarise(campaign_9=n())
+
+## Obtaining the Min, 1st Qu,  Median, Mean 3rd Qu, and Max for Campaign on July 9, 2016
+summary(campaign_on_july_9$campaign_9) 
+ 
+campaign_on_july_9 <- arrange(campaign_on_july_9, desc(campaign_9))
+campaign_on_july_9$campaign_name <- factor(campaign_on_july_9$campaign_name,
+                       levels = c("$1 Million Contest ", "....."),
+                       ordered = TRUE)
+
+ggplot(campaign_on_july_9 , aes(x = campaign_name, y = campaign_9, fill=campaign_name)) +
+  geom_bar()+
+  xlab("Type of Campaign")+
+  ylab("Total Users")+
+  ggtitle("The 20 most popular campaigns on July the 9th")+
+  theme(legend.title=element_blank(),
+          axis.text.x=element_text(angle=80, hjust=1),
+          legend.background = element_rect(fill = "transparent"))
+
+```
+
+##### What was the most popular campaign on July the 16th
+```{r echo=FALSE, message=FALSE, warning = FALSE}
+campaign_on_july_16 <-july_16_cluster %>%
+  group_by(campaign_name) %>%
+  summarise(campaign_16=n())
+
+## Obtaining the Min, 1st Qu,  Median, Mean 3rd Qu, and Max for Campaign on July 9, 2016
+summary(campaign_on_july_16$campaign_16) 
+ 
+campaign_on_july_16 <- arrange(campaign_on_july_16, desc(campaign_16))
+campaign_on_july_16
+campaign_on_july_16$campaign_name <- factor(campaign_on_july_16$campaign_name,
+                       levels = c("$1 Million Contest", "Special Bonus Card", "..."),
+                       ordered = TRUE)
+
+ggplot(campaign_on_july_16 , aes(x = campaign_name, y = campaign_16, fill=campaign_name)) +
+  geom_bar()+
+  xlab("Type of Campaign")+
+  ylab("Total Users")+
+  ggtitle("The 20 most popular campaigns on July the 16th")+
+  theme(legend.title=element_blank(),
+          axis.text.x=element_text(angle=80, hjust=1),
+          legend.background = element_rect(fill = "transparent"))
+
+```
+
+##### What was the most popular campaign on July the 23rd
+```{r echo=FALSE, message=FALSE, warning = FALSE}
+
+## july the 23rd: 183
+campaign_on_july_23 <-july_23_cluster %>%
+  group_by(campaign_name) %>%
+  summarise(campaign_23=n())
+ 
+## Obtaining the Min, 1st Qu,  Median, Mean 3rd Qu, and Max for Campaign on July 9, 2016
+summary(campaign_on_july_23$campaign_23) 
+ 
+campaign_on_july_23 <- arrange(campaign_on_july_23, desc(campaign_23))
+campaign_on_july_23
+campaign_on_july_23$campaign_name <- factor(campaign_on_july_23$campaign_name,
+                       levels = c("$1 Million Contest", "..."),
+                       ordered = TRUE)
+
+ggplot(campaign_on_july_23, aes(x = campaign_name, y = campaign_23, fill=campaign_name)) +
+  geom_bar()+
+  xlab("Type of Campaign")+
+  ylab("Total Users")+
+  ggtitle("The 15 most popular campaigns on July the 23rd")+
+  theme(legend.title=element_blank(),
+          axis.text.x=element_text(angle=80, hjust=1),
+          legend.background = element_rect(fill = "transparent"))
+
+```
+
+
+
+##### Most popular type of awards on July the 9th. R means Reward, C means Cash, and T means tokens.
+```{r echo=TRUE, message=FALSE, warning = FALSE}
+## july the 9th:
+award_type_on_july_9 <-july_9_cluster %>%
+  group_by(award_type) %>%
+  summarise(award_type_on_july_9_total=n()) %>%
+  arrange(desc(award_type_on_july_9_total))
+
+award_type_on_july_9
+summary(award_type_on_july_9$award_type_on_july_9_total)
+
+award_type_on_july_9$award_type <- factor(award_type_on_july_9$award_type,
+                                levels = c("C", "R", "T"),
+                                ordered = TRUE)
+
+ggplot(award_type_on_july_9, aes(x = award_type, y = award_type_on_july_9_total, fill = award_type)) +
+  geom_bar()+
+  xlab("Type of Award")+
+  ylab("Total Users")+
+  ggtitle("Most popular type of awards on July the 9th")+
+  theme(legend.title=element_blank(),
+          axis.text.x=element_text(angle=80, hjust=1),
+          legend.background = element_rect(fill = "transparent"))
+```
+
+##### Most popular type of awards on July 16th 
+```{r echo=TRUE, message=FALSE, warning = FALSE}
+## july the 16th: 
+award_type_on_july_16 <-july_16_cluster %>%
+  group_by(award_type) %>%
+  summarise(award_type_on_july_16_total=n())
+ 
+award_type_on_july_16 <- arrange(award_type_on_july_16, desc(award_type_on_july_16_total))
+award_type_on_july_16
+
+summary(award_type_on_july_16)
+
+award_type_on_july_16$award_type <- factor(award_type_on_july_16$award_type,
+                                levels = c("C", "R", "T"),
+                                ordered = TRUE)
+
+ggplot(award_type_on_july_16, aes(x = award_type, y = award_type_on_july_16_total, fill = award_type)) +
+  geom_bar()+
+  xlab("Type of Award")+
+  ylab("Total Users")+
+  ggtitle("Most popular type of awards on July the 16th")+
+  theme(legend.title=element_blank(),
+          axis.text.x=element_text(angle=80, hjust=1),
+          legend.background = element_rect(fill = "transparent"))
+```
+
+##### Most popular type of awards on July the 23rd 
+```{r echo=TRUE, message=FALSE, warning = FALSE}
+## july the 23rd: 
+award_type_on_july_23 <-july_23_cluster %>%
+  group_by(award_type) %>%
+  summarise(award_type_on_july_23_total=n())
+ 
+award_type_on_july_23 <- arrange(award_type_on_july_23, desc(award_type_on_july_23_total))
+award_type_on_july_23
+
+summary(award_type_on_july_23)
+
+award_type_on_july_23$award_type <- factor(award_type_on_july_23$award_type,
+                                levels = c("C", "R", "T"),
+                                ordered = TRUE)
+
+ggplot(award_type_on_july_23, aes(x = award_type, y = award_type_on_july_23_total, fill = award_type)) +
+  geom_bar()+
+  xlab("Type of Award")+
+  ylab("Total Users")+
+  ggtitle("Most popular type of awards on July the 23th")+
+  theme(legend.title=element_blank(),
+          axis.text.x=element_text(angle=80, hjust=1),
+          legend.background = element_rect(fill = "transparent"))
+```
+
+
+##### What was the award value that users earned the most on July the 9th
+```{r}
+# July 9th
+money_on_july_9 <-july_9_cluster %>%
+  group_by(award_value) %>%
+  summarize(money_on_july_9_total=n())
+
+## Brief Statistical Analysis
+summary(money_on_july_9$money_on_july_9_total)
+
+## Results
+money_on_july_9 <- arrange(money_on_july_9, desc(money_on_july_9_total))
+money_on_july_9
+
+money_on_july_9$award_value <- factor(money_on_july_9$award_value,
+                                levels = c("300", "25", "1000", "10", "15", "50", "5000",
+                                           "5", "500", "1", "1500", "250", "2000", "400",
+                                           "2500","100", "777", "2", "1000", "900", "1250"),
+                                ordered = TRUE)
+
+ggplot(money_on_july_9, aes(x = award_value, y = money_on_july_9_total, fill = award_value)) +
+  geom_bar()+
+  xlab("Award Value")+
+  ylab("Total Users")+
+  ggtitle("Award value that users earned the most on July the 9th")+
+  theme(legend.title=element_blank(),
+          axis.text.x=element_text(angle=80, hjust=1),
+          legend.background = element_rect(fill = "transparent"))
+
+```
+
+##### What was the award value that users earned the most on July the 23th
+```{r}
+# July 23th
+money_on_july_23 <-july_23_cluster %>%
+  group_by(award_value) %>%
+  summarize(money_on_july_23_total=n())
+
+## Brief Statistical Analysis
+summary(money_on_july_23$money_on_july_23_total)
+
+## Results
+money_on_july_23 <- arrange(money_on_july_23, desc(money_on_july_23_total))
+money_on_july_23
+
+money_on_july_23$award_value <- factor(money_on_july_23$award_value,
+                                levels = c("25", "300", "10", "15", "1000", "NA", "20",
+                                           "50", "5000", "500", "5", "1500", "250", "1",
+                                           "400","2500",  "2000", "100", "2", "10000",
+                                           "900", "1250", "777", "30"),
+                                ordered = TRUE)
+
+ggplot(money_on_july_23, aes(x = award_value, y = money_on_july_23_total, fill = award_value)) +
+  geom_bar()+
+  xlab("Award Value")+
+  ylab("Total Users")+
+  ggtitle("Award value that users earned the most on July the 23rd")+
+  theme(legend.title=element_blank(),
+          axis.text.x=element_text(angle=80, hjust=1),
+          legend.background = element_rect(fill = "transparent"))
+
+```
