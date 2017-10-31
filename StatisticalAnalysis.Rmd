@@ -5,7 +5,7 @@ date: "September/01/2016"
 output: word_document
 ---
 
-##### In this file we're analyzing 30,727,926 users who played on our Android and iOS mobile application in the month of July 9, July 16, and July the 23rd, of 2016. I'll be analyzing the most popular award value, the award type, the type of card the user played, the campaigns that we’re acquiring more users, what acquisition source they came from, how much money we made for each user, how many times they played, and how many days they stayed on file.
+##### In this file we're analyzing 30,727,926 users who played on our Android and iOS mobile application on July 9, July 16, and July the 23rd, of 2016. I'll be analyzing the most popular award value, the award type, the type of card the user played, the campaigns that we’re acquiring more users, what acquisition source they came from, how much money we made for each user, how many times they played, and how many days they stayed on file.
 
 
 ```{r}
@@ -30,21 +30,21 @@ con <- dbConnect(drv=drv_generic,
                  dbname="name_of_db")
 
 awards_and_opportunity <- dbSendQuery(con, 
-  "SELECT  a.award_id, a.award_type, a.award_value, o.opp_id, o.opp_descript, o.isavailable
-   FROM mobile_app.awards a 
-   FULL JOIN mobile_app.opportunities o ON a.award_id = o.awardid")
+  "SELECT  a.award_identifier, a.type_of_award, a.value_of_the_award, o.id_of_opportunity, o.description_of_the_opp, o.availability_ind
+   FROM mobile_android_app.data_awards a 
+   FULL JOIN mobile_android_app.data_opportunities o ON a.award_identifier = o.awardid")
 july_9_2016_cluter <- dbSendQuery(con,
- "SELECT userid, oppid, createstamp FROM mobile_app.daily_users_behavior_2016_07_09"
+ "SELECT id_of_the_user, opportunity_id, createstamp FROM mobile_android_app.data_daily_users_behavior_2016_07_09"
                           )
 july_16_2016_cluter <- dbSendQuery(con,
-  "SELECT userid, oppid, createstamp FROM     mobile_app.daily_users_behavior_2016_07_16"
+  "SELECT id_of_the_user, opportunity_id, createstamp FROM     mobile_android_app.data_daily_users_behavior_2016_07_16"
                             )
   
 july_23_2016_cluter <- dbSendQuery(con,
-         "SELECT userid, oppid, createstamp FROM mobile_app.daily_users_behavior_2016_07_23"
+         "SELECT id_of_the_user, opportunity_id, createstamp FROM mobile_android_app.data_daily_users_behavior_2016_07_23"
                             )
 daily_opportunities_3_sundays <- dbSendQuery(con,
-        "SELECT * FROM mobile_app.daily_opportunities WHERE source IN ('App_Lovin') AND 
+        "SELECT * FROM mobile_android_app.data_daily_opportunities WHERE source IN ('App_Lovin') AND 
         ((date BETWEEN '2016-07-09 12:00:00' AND '2016-07-10 12:00:00') OR 
         (date BETWEEN '2016-07-16 12:00:00' AND '2016-07-17 12:00:00') OR 
         (date BETWEEN '2016-07-23 12:00:00' AND '2016-07-24 12:00:00'))"
@@ -60,10 +60,10 @@ daily_opportunities_3_sundays <- fetch(daily_opportunities_3_sundays, n=-1)
 ##### Manipulating Cleaning
 ```{r}
 ###### Joining our data
-july_9_2016_cluter$oppid <- as.numeric(july_9_2016_cluter$oppid)
-july_16_2016_cluter$oppid <- as.numeric(july_16_2016_cluter$oppid)
-july_23_2016_cluter$oppid <- as.numeric(july_23_2016_cluter$oppid)
-awards_and_opportunity$oppid <- as.numeric(awards_and_opportunity$oppid)
+july_9_2016_cluter$opportunity_id <- as.numeric(july_9_2016_cluter$opportunity_id)
+july_16_2016_cluter$opportunity_id <- as.numeric(july_16_2016_cluter$opportunity_id)
+july_23_2016_cluter$opportunity_id <- as.numeric(july_23_2016_cluter$opportunity_id)
+awards_and_opportunity$opportunity_id <- as.numeric(awards_and_opportunity$opportunity_id)
 
 ## LJ
 users_on_july_9 <- left_join(july_9_2016_cluter, awards_and_opportunity)
@@ -118,7 +118,7 @@ head(highest_money_user_made)
 ```{r}
 ## 
 profitable_users <- users_interaction %>%
-  group_by(userid, money_user_made, actual_day) %>%
+  group_by(id_of_the_user, money_user_made, actual_day) %>%
   summarise(profitable_total=n())
 
 ## In this sample we have 1,636 user who are profitable for the company 
@@ -128,7 +128,7 @@ what_majority_profitable_user_are_playing
 ## In this sample we have 271 users who are the highest most profitable
 highest_profitable_user <- filter(profitable_users, profitable_total >= 2)
 
-highest_profitable_user1 <- select(profitable_users, userid, money_user_made, profitable_total)
+highest_profitable_user1 <- select(profitable_users, id_of_the_user, money_user_made, profitable_total)
 highest_profitable_user1 <- filter(highest_profitable_user1, profitable_total >= 2)
 highest_profitable_user1
 
@@ -220,19 +220,19 @@ ggplot(campaign_on_july_23, aes(x = campaign_name, y = campaign_23, fill=campaig
 ##### Most popular type of awards on July the 9th. R means Reward, C means Cash, and T means tokens.
 ```{r echo=TRUE, message=FALSE, warning = FALSE}
 ## july the 9th:
-award_type_on_july_9 <-july_9_cluster %>%
-  group_by(award_type) %>%
-  summarise(award_type_on_july_9_total=n()) %>%
-  arrange(desc(award_type_on_july_9_total))
+type_of_award_on_july_9 <-july_9_cluster %>%
+  group_by(type_of_award) %>%
+  summarise(type_of_award_on_july_9_total=n()) %>%
+  arrange(desc(type_of_award_on_july_9_total))
 
-award_type_on_july_9
-summary(award_type_on_july_9$award_type_on_july_9_total)
+type_of_award_on_july_9
+summary(type_of_award_on_july_9$type_of_award_on_july_9_total)
 
-award_type_on_july_9$award_type <- factor(award_type_on_july_9$award_type,
+type_of_award_on_july_9$type_of_award <- factor(type_of_award_on_july_9$type_of_award,
                                 levels = c("C", "R", "T"),
                                 ordered = TRUE)
 
-ggplot(award_type_on_july_9, aes(x = award_type, y = award_type_on_july_9_total, fill = award_type)) +
+ggplot(type_of_award_on_july_9, aes(x = type_of_award, y = type_of_award_on_july_9_total, fill = type_of_award)) +
   geom_bar()+
   xlab("Type of Award")+
   ylab("Total Users")+
@@ -245,20 +245,20 @@ ggplot(award_type_on_july_9, aes(x = award_type, y = award_type_on_july_9_total,
 ##### Most popular type of awards on July 16th 
 ```{r echo=TRUE, message=FALSE, warning = FALSE}
 ## july the 16th: 
-award_type_on_july_16 <-july_16_cluster %>%
-  group_by(award_type) %>%
-  summarise(award_type_on_july_16_total=n())
+type_of_award_on_july_16 <-july_16_cluster %>%
+  group_by(type_of_award) %>%
+  summarise(type_of_award_on_july_16_total=n())
  
-award_type_on_july_16 <- arrange(award_type_on_july_16, desc(award_type_on_july_16_total))
-award_type_on_july_16
+type_of_award_on_july_16 <- arrange(type_of_award_on_july_16, desc(type_of_award_on_july_16_total))
+type_of_award_on_july_16
 
-summary(award_type_on_july_16)
+summary(type_of_award_on_july_16)
 
-award_type_on_july_16$award_type <- factor(award_type_on_july_16$award_type,
+type_of_award_on_july_16$type_of_award <- factor(type_of_award_on_july_16$type_of_award,
                                 levels = c("C", "R", "T"),
                                 ordered = TRUE)
 
-ggplot(award_type_on_july_16, aes(x = award_type, y = award_type_on_july_16_total, fill = award_type)) +
+ggplot(type_of_award_on_july_16, aes(x = type_of_award, y = type_of_award_on_july_16_total, fill = type_of_award)) +
   geom_bar()+
   xlab("Type of Award")+
   ylab("Total Users")+
@@ -271,20 +271,20 @@ ggplot(award_type_on_july_16, aes(x = award_type, y = award_type_on_july_16_tota
 ##### Most popular type of awards on July the 23rd 
 ```{r echo=TRUE, message=FALSE, warning = FALSE}
 ## july the 23rd: 
-award_type_on_july_23 <-july_23_cluster %>%
-  group_by(award_type) %>%
-  summarise(award_type_on_july_23_total=n())
+type_of_award_on_july_23 <-july_23_cluster %>%
+  group_by(type_of_award) %>%
+  summarise(type_of_award_on_july_23_total=n())
  
-award_type_on_july_23 <- arrange(award_type_on_july_23, desc(award_type_on_july_23_total))
-award_type_on_july_23
+type_of_award_on_july_23 <- arrange(type_of_award_on_july_23, desc(type_of_award_on_july_23_total))
+type_of_award_on_july_23
 
-summary(award_type_on_july_23)
+summary(type_of_award_on_july_23)
 
-award_type_on_july_23$award_type <- factor(award_type_on_july_23$award_type,
+type_of_award_on_july_23$type_of_award <- factor(type_of_award_on_july_23$type_of_award,
                                 levels = c("C", "R", "T"),
                                 ordered = TRUE)
 
-ggplot(award_type_on_july_23, aes(x = award_type, y = award_type_on_july_23_total, fill = award_type)) +
+ggplot(type_of_award_on_july_23, aes(x = type_of_award, y = type_of_award_on_july_23_total, fill = type_of_award)) +
   geom_bar()+
   xlab("Type of Award")+
   ylab("Total Users")+
@@ -299,7 +299,7 @@ ggplot(award_type_on_july_23, aes(x = award_type, y = award_type_on_july_23_tota
 ```{r}
 # July 9th
 money_on_july_9 <-july_9_cluster %>%
-  group_by(award_value) %>%
+  group_by(value_of_the_award) %>%
   summarize(money_on_july_9_total=n())
 
 ## Brief Statistical Analysis
@@ -309,13 +309,11 @@ summary(money_on_july_9$money_on_july_9_total)
 money_on_july_9 <- arrange(money_on_july_9, desc(money_on_july_9_total))
 money_on_july_9
 
-money_on_july_9$award_value <- factor(money_on_july_9$award_value,
-                                levels = c("300", "25", "1000", "10", "15", "50", "5000",
-                                           "5", "500", "1", "1500", "250", "2000", "400",
-                                           "2500","100", "777", "2", "1000", "900", "1250"),
+money_on_july_9$value_of_the_award <- factor(money_on_july_9$value_of_the_award,
+                                levels = c("list of money"),
                                 ordered = TRUE)
 
-ggplot(money_on_july_9, aes(x = award_value, y = money_on_july_9_total, fill = award_value)) +
+ggplot(money_on_july_9, aes(x = value_of_the_award, y = money_on_july_9_total, fill = value_of_the_award)) +
   geom_bar()+
   xlab("Award Value")+
   ylab("Total Users")+
@@ -330,7 +328,7 @@ ggplot(money_on_july_9, aes(x = award_value, y = money_on_july_9_total, fill = a
 ```{r}
 # July 23th
 money_on_july_23 <-july_23_cluster %>%
-  group_by(award_value) %>%
+  group_by(value_of_the_award) %>%
   summarize(money_on_july_23_total=n())
 
 ## Brief Statistical Analysis
@@ -340,14 +338,11 @@ summary(money_on_july_23$money_on_july_23_total)
 money_on_july_23 <- arrange(money_on_july_23, desc(money_on_july_23_total))
 money_on_july_23
 
-money_on_july_23$award_value <- factor(money_on_july_23$award_value,
-                                levels = c("25", "300", "10", "15", "1000", "NA", "20",
-                                           "50", "5000", "500", "5", "1500", "250", "1",
-                                           "400","2500",  "2000", "100", "2", "10000",
-                                           "900", "1250", "777", "30"),
+money_on_july_23$value_of_the_award <- factor(money_on_july_23$value_of_the_award,
+                                levels = c("list_of_money_variable"),
                                 ordered = TRUE)
 
-ggplot(money_on_july_23, aes(x = award_value, y = money_on_july_23_total, fill = award_value)) +
+ggplot(money_on_july_23, aes(x = value_of_the_award, y = money_on_july_23_total, fill = value_of_the_award)) +
   geom_bar()+
   xlab("Award Value")+
   ylab("Total Users")+
